@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Maven 用户级配置文件
+    说明：本文件仅指定本地仓库目录为 F:\backup\.m2\repository，使本项目优先复用本机已下载的依赖。
+    使用方式：
+      1) 命令行执行：mvn -gs E:\zgm\trae\shop\server\settings.xml clean compile
+      2) IDEA：File → Settings → Build → Build Tools → Maven → User settings file，勾选 Override 并指向本文件
+    @author zyr
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+    <!-- 本地仓库目录，复用 F:\backup\.m2 下已有依赖，缺失依赖将自动从远程中央仓库补充下载 -->
+    <localRepository>F:\backup\.m2\repository</localRepository>
+
+    <!-- 镜像配置：使用阿里云公共仓库加速国内下载 -->
+    <mirrors>
+        <mirror>
+            <id>aliyunmaven</id>
+            <mirrorOf>*</mirrorOf>
+            <name>阿里云公共仓库</name>
+            <url>https://maven.aliyun.com/repository/public</url>
+        </mirror>
+    </mirrors>
+
+    <profiles>
+        <profile>
+            <id>default</id>
+            <repositories>
+                <repository>
+                    <id>aliyunmaven</id>
+                    <url>https://maven.aliyun.com/repository/public</url>
+                    <releases><enabled>true</enabled></releases>
+                    <snapshots><enabled>true</enabled></snapshots>
+                </repository>
+            </repositories>
+        </profile>
+    </profiles>
+
+    <activeProfiles>
+        <activeProfile>default</activeProfile>
+    </activeProfiles>
+</settings>

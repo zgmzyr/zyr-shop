@@ -1,0 +1,144 @@
+# ===================================================================
+# zyr_shop 基于 Spring AI2.0 的带智能客服的商城系统 - 后端配置文件
+# @author zyr
+# ===================================================================
+server:
+  # 后端服务端口（避开既有 RAG 项目 8080，使用 8081）
+  port: 8081
+  # Tomcat 编码统一 UTF-8，避免 Windows 中文环境乱码
+  servlet:
+    context-parameters:
+      encoding: UTF-8
+
+spring:
+  application:
+    name: zyr-shop-server
+  # 默认激活 local 配置文件（application-local.yml），支付宝沙箱密钥写在该文件中
+  # 生产环境可通过环境变量 SPRING_PROFILES_ACTIVE 覆盖（如 prod）
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  # ---------------- MySQL 8 数据源配置 ----------------
+  datasource:
+    url: jdbc:mysql://localhost:3306/zyr_shop?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: z123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # ---------------- JPA / Hibernate 配置 ----------------
+  jpa:
+    # 首次启动可自动根据实体维护表结构（生产环境建议改为 validate 并手动执行 SQL）
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  # ---------------- Thymeleaf 模板引擎配置（普通用户前台） ----------------
+  thymeleaf:
+    # 开发期关闭缓存，改模板即时生效
+    cache: false
+    encoding: UTF-8
+    prefix: classpath:/templates/
+    suffix: .html
+    mode: HTML
+
+  # ---------------- 文件上传大小限制 ----------------
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+  # ---------------- Redis 配置（向量数据库，远程 Redis Stack 已含 RediSearch 模块） ----------------
+  # 按需求固定连接 redis://192.168.58.131:12000（不要使用 docker 启动 redis stack）
+  data:
+    redis:
+      url: redis://192.168.58.131:12000
+      timeout: 10s
+
+  # ---------------- Spring AI 配置 ----------------
+  ai:
+    model:
+      # 对话模型使用 deepseek
+      chat: deepseek
+      # 嵌入模型使用本项目在 AiConfig 中手动声明的 DashScope Bean，关闭官方自动装配
+      embedding: none
+    # DeepSeek 大模型配置（请填入自己的 API 密钥，或配置同名环境变量 DEEPSEEK_API_KEY）
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY:}
+      chat:
+        # 指定使用 deepseek-chat 模型
+        model: deepseek-chat
+        temperature: 0.7
+    # Redis 向量库配置
+    vectorstore:
+      redis:
+        # 首次启动自动创建向量索引
+        initialize-schema: true
+        # 索引名称（与既有 RAG 项目隔离）
+        index-name: zyr_shop_kb_index
+        # Redis key 前缀
+        prefix: "zyr:shop:vec:"
+        # 距离度量：余弦相似度
+        distance-metric: COSINE
+        # 索引算法：HNSW
+        vector-algorithm: HNSW
+
+  # Jackson 序列化说明：
+  # Spring Boot 4 使用 Jackson 3，检测到 JSR-310 时间模块后默认即将 LocalDateTime
+  # 以 ISO-8601 字符串（如 2026-10-08T17:15:40）输出，无需再配置 write-dates-as-timestamps
+
+# ---------------- 本项目自定义配置 ----------------
+zyr:
+  # JWT 登录令牌配置
+  jwt:
+    # HS256 密钥（长度至少 32 字节，生产环境请修改并通过环境变量注入）
+    secret: ${ZYR_JWT_SECRET:zyr-shop-prod-secret-key-2026-please-change-it-0123456789}
+    # 令牌有效期（小时）
+    expire-hours: 24
+  # 上传文件统一保存目录（按需求固定为 D 盘 uploads4）
+  upload:
+    dir: D:/uploads4
+  ai:
+    # 阿里云百炼 DashScope 嵌入模型配置（OpenAI 兼容模式）
+    dashscope:
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      api-key: ${DASHSCOPE_API_KEY:}
+      embedding-model: text-embedding-v3
+    # RAG 检索参数（智能客服使用）
+    rag:
+      # 每次检索返回的最相关分块数量
+      top-k: 4
+      # 相似度阈值（0~1，越大越严格）
+      similarity-threshold: 0.5
+      # 携带最近多少轮历史消息参与问答
+      chat-history-limit: 6
+  # 支付宝沙箱支付配置（请替换为自己的沙箱凭据，或通过同名环境变量注入）
+  alipay:
+    # 沙箱应用 APPID
+    app-id: ${ALIPAY_APP_ID:}
+    # 商户私钥（PKCS8 格式，去掉 PEM 头尾与换行）
+    app-private-key: ${ALIPAY_APP_PRIVATE_KEY:}
+    # 支付宝公钥（沙箱环境在开放平台"沙箱"页可见）
+    alipay-public-key: ${ALIPAY_PUBLIC_KEY:}
+    # 新版沙箱网关地址（支付宝文档中心 2026 确认地址）
+    gateway: https://openapi-sandbox.dl.alipaydev.com/gateway.do
+    # 异步通知地址（需公网可达；本地学习可用 ngrok 等内网穿透）
+    notify-url: ${ALIPAY_NOTIFY_URL:http://localhost:8081/api/payment/notify}
+    # 同步返回地址（支付完成后浏览器跳转回商城）
+    return-url: http://localhost:8081/order
+    # 签名类型
+    sign-type: RSA2
+    # 字符编码
+    charset: UTF-8
+    # 报文格式
+    format: json
+
+# 日志级别
+logging:
+  level:
+    com.zyr.shop: debug
+    org.springframework.ai: info

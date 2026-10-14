@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<!--
+    订单结算页（需登录）
+    流程：
+      1. GET /api/cart 取购物车商品 → 展示
+      2. 用户填写收货信息后 POST /api/order 创建订单
+      3. 创建成功后清空购物车并跳转 /pay?orderNo=xxx 走支付宝沙箱
+    作者 zyr
+-->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>订单结算 - zyr_shop 商城</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <script th:src="@{/js/common.js}"></script>
+</head>
+<body>
+<header class="navbar">
+    <div class="navbar-inner">
+        <a class="navbar-brand" th:href="@{/}">
+            <span class="logo"></span>
+            <span>zyr_shop 商城</span>
+        </a>
+        <nav class="navbar-menu">
+            <a th:href="@{/}">首页</a>
+            <a th:href="@{/cart}">购物车</a>
+            <a th:href="@{/order}">我的订单</a>
+            <a th:href="@{/chat}">智能客服</a>
+        </nav>
+        <div class="navbar-user" id="navbarUser"></div>
+    </div>
+</header>
+
+<div class="container">
+    <div class="card">
+        <div class="card-title">📋 订单结算</div>
+        <table class="data-table">
+            <thead>
+            <tr>
+                <th>商品</th>
+                <th>单价</th>
+                <th>数量</th>
+                <th>小计</th>
+            </tr>
+            </thead>
+            <tbody id="checkoutBody"></tbody>
+        </table>
+        <div id="checkoutTotal" style="text-align:right;padding:16px 0;"></div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">收货信息</div>
+        <form id="orderForm" onsubmit="return submitOrder(event)">
+            <div class="form-group">
+                <label>收件人</label>
+                <input type="text" id="receiver" placeholder="请输入收件人姓名" required>
+            </div>
+            <div class="form-group">
+                <label>联系电话</label>
+                <input type="text" id="phone" placeholder="请输入联系电话" required>
+            </div>
+            <div class="form-group">
+                <label>收货地址</label>
+                <textarea id="address" rows="3" placeholder="请输入详细收货地址" required></textarea>
+            </div>
+            <div style="text-align:right;">
+                <a class="btn btn-default" href="/cart">返回购物车</a>
+                <button type="submit" class="btn btn-success" id="submitBtn">提交订单并支付</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    let totalAmount = 0;
+
+    /**
+     * 加载购物车商品，展示结算清单
+     */
+    async function loadCart() {
+        if (!requireLogin()) return;
+        try {
+            const cart = await api('/api/cart');
+            const items = Array.isArray(cart) ? cart : [];
+            const body = document.getElementById('checkoutBody');
+            if (items.length === 0) {
+                body.innerHTML = `<tr><td colspan="4" class="empty">购物车空空如也，<a href="/">去逛逛</a></td></tr>`;
+                document.getElementById('checkoutTotal').innerHTML = '';
+                document.getElementById('submitBtn').disabled = true;
+                return;
+            }
+            let total = 0;
+            body.innerHTML = items.map(item => {
+                const sub = item.price * item.quantity;
+                total += sub;
+                return `
+                    <tr>
+                        <td>
+                            <div class="product-cell">
+                                <div class="thumb">
+                                    ${item.coverImage ? `<img src="${escapeHtml(item.coverImage)}" alt="${escapeHtml(item.productName)}">` : '📦'}
+                                </div>
+                                <a href="/product/${item.productId}">${escapeHtml(item.productName)}</a>
+                            </div>
+                        </td>
+                        <td class="text-danger">${formatPrice(item.price)}</td>
+                        <td>${item.quantity}</td>
+                        <td class="text-danger">${formatPrice(sub)}</td>
+                    </tr>
+                `;
+            }).join('');
+            totalAmount = total;
+            document.getElementById('checkoutTotal').innerHTML = `
+                合计：<span class="text-danger" style="font-size:20px;font-weight:600;">${formatPrice(total)}</span>
+            `;
+        } catch (e) {
+            toast(e.message || '加载失败', 'error');
+        }
+    }
+
+    /**
+     * 提交订单
+     */
+    async function submitOrder(e) {
+        e.preventDefault();
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.textContent = '提交中...';
+        try {
+            const body = {
+                receiver: document.getElementById('receiver').value.trim(),
+                phone: document.getElementById('phone').value.trim(),
+                address: document.getElementById('address').value.trim()
+            };
+            const order = await api('/api/order', {
+                method: 'POST',
+                body: JSON.stringify(body)
+            });
+            toast('订单创建成功，正在跳转支付', 'success');
+            // 跳转支付宝沙箱支付页
+            setTimeout(() => {
+                location.href = '/pay?orderNo=' + encodeURIComponent(order.orderNo);
+            }, 500);
+        } catch (err) {
+            toast(err.message || '提交失败', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '提交订单并支付';
+        }
+        return false;
+    }
+
+    // 复用 layout 用户区
+    (async function renderUser() {
+        const box = document.getElementById('navbarUser');
+        try {
+            const user = await api('/api/auth/info');
+            const nick = user.nickname || user.username || '用户';
+            setCookie(NICKNAME_KEY, nick, 1);
+            // 自动填充收件人
+            if (!document.getElementById('receiver').value) {
+                document.getElementById('receiver').value = nick;
+            }
+            if (!document.getElementById('phone').value && user.phone) {
+                document.getElementById('phone').value = user.phone;
+            }
+            const initial = nick.charAt(0).toUpperCase();
+            box.innerHTML = `
+                <span class="avatar">${escapeHtml(initial)}</span>
+                <span>${escapeHtml(nick)}</span>
+                <button class="logout-btn" onclick="logout()">退出</button>
+            `;
+        } catch (e) {
+            box.innerHTML = `<a href="/login">登录</a>`;
+        }
+    })();
+
+    loadCart();
+</script>
+</body>
+</html>

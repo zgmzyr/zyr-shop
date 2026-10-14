@@ -1,0 +1,143 @@
+/**
+ * 全局样式：CSS 变量、reset、通用工具类
+ * @author zyr
+ */
+
+:root {
+  /* 主题色 */
+  --zyr-primary: #6366f1;
+  --zyr-primary-2: #818cf8;
+  --zyr-cyan: #06b6d4;
+  --zyr-bg: #f5f7fb;
+
+  /* 侧边栏渐变 */
+  --zyr-sidebar-1: #1e1b4b;
+  --zyr-sidebar-2: #3730a3;
+
+  /* 文本 */
+  --zyr-text: #1f2937;
+  --zyr-text-light: #6b7280;
+  --zyr-border: #ebeef5;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  color: var(--zyr-text);
+  background: var(--zyr-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--zyr-primary);
+  text-decoration: none;
+}
+
+/* 通用页面卡片容器 */
+.page-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 12px rgba(31, 41, 55, 0.05);
+  margin-bottom: 20px;
+}
+
+.page-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--zyr-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* 统计卡片网格 */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 12px rgba(31, 41, 55, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card .stat-icon {
+  position: absolute;
+  right: -10px;
+  top: -10px;
+  font-size: 70px;
+  opacity: 0.08;
+}
+
+.stat-card .stat-label {
+  color: var(--zyr-text-light);
+  font-size: 13px;
+}
+
+.stat-card .stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  margin-top: 8px;
+  background: linear-gradient(135deg, var(--zyr-primary), var(--zyr-cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.stat-card .stat-foot {
+  color: var(--zyr-text-light);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.chart-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 12px rgba(31, 41, 55, 0.05);
+}
+
+.chart-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.chart-box {
+  width: 100%;
+  height: 280px;
+}
+
+/* 响应式 */
+@media (max-width: 1200px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .chart-grid {
+    grid-template-columns: 1fr;
+  }
+}

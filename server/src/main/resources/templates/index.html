@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<!--
+    商城首页：商品列表 + 分类筛选
+    数据来源：
+      - GET /api/product/categories        分类列表
+      - GET /api/product/list?categoryId=  分页商品列表
+    作者 zyr
+-->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>首页 - zyr_shop 商城</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <script th:src="@{/js/common.js}"></script>
+</head>
+<body>
+<!-- 顶部导航 -->
+<header class="navbar">
+    <div class="navbar-inner">
+        <a class="navbar-brand" th:href="@{/}">
+            <span class="logo"></span>
+            <span>zyr_shop 商城</span>
+        </a>
+        <nav class="navbar-menu" id="navbarMenu">
+            <a th:href="@{/}" class="active">首页</a>
+            <a th:href="@{/cart}">购物车</a>
+            <a th:href="@{/order}">我的订单</a>
+            <a th:href="@{/chat}">智能客服</a>
+        </nav>
+        <div class="navbar-user" id="navbarUser"></div>
+    </div>
+</header>
+
+<div class="container">
+    <!-- 分类筛选条 -->
+    <div class="category-bar" id="categoryBar">
+        <span class="label">分类：</span>
+        <span class="cat-item active" data-id="" onclick="selectCategory('')">全部</span>
+    </div>
+
+    <!-- 商品网格 -->
+    <div class="product-grid" id="productGrid"></div>
+
+    <!-- 分页 -->
+    <div class="pagination" id="pagination"></div>
+</div>
+
+<script>
+    // 当前查询参数
+    const state = { page: 1, size: 8, categoryId: '' };
+
+    /**
+     * 加载商品分类
+     */
+    async function loadCategories() {
+        try {
+            const list = await api('/api/product/categories');
+            const bar = document.getElementById('categoryBar');
+            list.forEach(c => {
+                const el = document.createElement('span');
+                el.className = 'cat-item';
+                el.dataset.id = c.id;
+                el.textContent = c.name;
+                el.onclick = () => selectCategory(c.id);
+                bar.appendChild(el);
+            });
+        } catch (e) {
+            console.error('分类加载失败', e);
+        }
+    }
+
+    /**
+     * 加载商品列表
+     */
+    async function loadProducts() {
+        const grid = document.getElementById('productGrid');
+        grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="icon">商品加载中...</div></div>';
+        try {
+            const params = new URLSearchParams({ page: state.page, size: state.size });
+            if (state.categoryId) params.set('categoryId', state.categoryId);
+            const pageData = await api('/api/product/list?' + params.toString());
+            const records = pageData.records || pageData.list || pageData.content || [];
+            if (records.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty" style="grid-column:1/-1">
+                        <div class="icon">🛒</div>
+                        <div>暂无商品</div>
+                    </div>`;
+            } else {
+                grid.innerHTML = records.map(p => `
+                    <div class="product-card" onclick="location.href='/product/${p.id}'">
+                        <div class="product-image">
+                            ${p.coverImage ? `<img src="${escapeHtml(p.coverImage)}" alt="${escapeHtml(p.name)}">` : '📦'}
+                        </div>
+                        <div class="product-info">
+                            <div class="product-name">${escapeHtml(p.name)}</div>
+                            <div>
+                                <span class="product-price">${formatPrice(p.price)}</span>
+                                <span class="product-stock">库存 ${p.stock || 0}</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+            renderPagination(pageData);
+        } catch (e) {
+            grid.innerHTML = `<div class="empty" style="grid-column:1/-1">${escapeHtml(e.message)}</div>`;
+        }
+    }
+
+    /**
+     * 渲染分页条
+     */
+    function renderPagination(pageData) {
+        const total = pageData.total || pageData.totalElements || 0;
+        const totalPages = pageData.pages || pageData.totalPages || Math.ceil(total / state.size);
+        const box = document.getElementById('pagination');
+        if (totalPages <= 1) { box.innerHTML = ''; return; }
+        let html = '';
+        html += `<button ${state.page <= 1 ? 'disabled' : ''} onclick="gotoPage(${state.page - 1})">上一页</button>`;
+        for (let i = 1; i <= totalPages; i++) {
+            html += `<button class="${i === state.page ? 'active' : ''}" onclick="gotoPage(${i})">${i}</button>`;
+        }
+        html += `<button ${state.page >= totalPages ? 'disabled' : ''} onclick="gotoPage(${state.page + 1})">下一页</button>`;
+        box.innerHTML = html;
+    }
+
+    function gotoPage(p) { state.page = p; loadProducts(); }
+
+    /**
+     * 选择分类
+     */
+    function selectCategory(id) {
+        state.categoryId = id;
+        state.page = 1;
+        document.querySelectorAll('#categoryBar .cat-item').forEach(el => {
+            el.classList.toggle('active', String(el.dataset.id) === String(id));
+        });
+        loadProducts();
+    }
+
+    // 渲染右上角用户区（与 layout 行为一致，本页直接复用）
+    (async function renderUser() {
+        const box = document.getElementById('navbarUser');
+        const token = getToken();
+        if (!token) {
+            box.innerHTML = `<a href="/login">登录</a>`;
+            return;
+        }
+        try {
+            const user = await api('/api/auth/info');
+            const nick = user.nickname || user.username || '用户';
+            setCookie(NICKNAME_KEY, nick, 1);
+            const initial = nick.charAt(0).toUpperCase();
+            box.innerHTML = `
+                <span class="avatar">${escapeHtml(initial)}</span>
+                <span>${escapeHtml(nick)}</span>
+                <button class="logout-btn" onclick="logout()">退出</button>
+            `;
+        } catch (e) {
+            box.innerHTML = `<a href="/login">登录</a>`;
+        }
+    })();
+
+    // 初始化
+    loadCategories().then(loadProducts);
+</script>
+</body>
+</html>

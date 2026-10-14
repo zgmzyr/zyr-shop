@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<!--
+    我的订单页（需登录）
+    数据来源：
+      - GET /api/order                  我的订单列表
+      - PUT /api/order/{orderNo}/cancel  取消订单
+      - GET  /api/order/{orderNo}        订单详情（本页用 modal 简化展示）
+    作者 zyr
+-->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的订单 - zyr_shop 商城</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <script th:src="@{/js/common.js}"></script>
+</head>
+<body>
+<header class="navbar">
+    <div class="navbar-inner">
+        <a class="navbar-brand" th:href="@{/}">
+            <span class="logo"></span>
+            <span>zyr_shop 商城</span>
+        </a>
+        <nav class="navbar-menu">
+            <a th:href="@{/}">首页</a>
+            <a th:href="@{/cart}">购物车</a>
+            <a th:href="@{/order}" class="active">我的订单</a>
+            <a th:href="@{/chat}">智能客服</a>
+        </nav>
+        <div class="navbar-user" id="navbarUser"></div>
+    </div>
+</header>
+
+<div class="container">
+    <div class="card">
+        <div class="card-title">📦 我的订单</div>
+        <div id="orderList"></div>
+    </div>
+</div>
+
+<script>
+    /**
+     * 加载订单列表
+     */
+    async function loadOrders() {
+        if (!requireLogin()) return;
+        const box = document.getElementById('orderList');
+        box.innerHTML = `<div class="empty">加载中...</div>`;
+        try {
+            // 接口返回的可能是 List<OrderVO> 或 Page<OrderVO>，统一兼容
+            const data = await api('/api/order/list');
+            const list = Array.isArray(data) ? data : (data.records || data.content || []);
+            if (list.length === 0) {
+                box.innerHTML = `
+                    <div class="empty">
+                        <div class="icon">📦</div>
+                        <div>暂无订单，<a href="/">去购物</a></div>
+                    </div>`;
+                return;
+            }
+            box.innerHTML = list.map(o => {
+                const items = o.items || [];
+                const itemsHtml = items.map(it => `
+                    <div style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+                        <div class="thumb" style="width:40px;height:40px;flex-shrink:0;">
+                            ${it.coverImage ? `<img src="${escapeHtml(it.coverImage)}" alt="${escapeHtml(it.productName)}">` : '📦'}
+                        </div>
+                        <div style="flex:1;">
+                            <a href="/product/${it.productId}">${escapeHtml(it.productName)}</a>
+                        </div>
+                        <div class="text-muted">${it.quantity} 件 × ${formatPrice(it.price)}</div>
+                    </div>
+                `).join('');
+                return `
+                    <div class="card" style="margin-bottom:16px;">
+                        <div style="display:flex;justify-content:space-between;border-bottom:1px dashed #ebeef5;padding-bottom:8px;margin-bottom:8px;font-size:13px;color:#909399;">
+                            <span>订单号：${escapeHtml(o.orderNo)}</span>
+                            <span>${formatTime(o.createdAt)}</span>
+                        </div>
+                        ${itemsHtml}
+                        <div style="border-top:1px dashed #ebeef5;margin-top:8px;padding-top:12px;display:flex;justify-content:space-between;align-items:center;">
+                            <span class="tag ${orderStatusClass(o.status)}">${orderStatusText(o.status)}</span>
+                            <div>
+                                合计：<span class="text-danger" style="font-size:18px;font-weight:600;">${formatPrice(o.totalAmount)}</span>
+                                ${o.status === 'PENDING' ? `
+                                    <button class="btn btn-warning btn-sm" style="margin-left:12px;" onclick="payOrder('${escapeHtml(o.orderNo)}')">去支付</button>
+                                    <button class="btn btn-default btn-sm" onclick="cancelOrder('${escapeHtml(o.orderNo)}')">取消订单</button>
+                                ` : ''}
+                                <button class="btn btn-default btn-sm" onclick="viewDetail('${escapeHtml(o.orderNo)}')">详情</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } catch (e) {
+            box.innerHTML = `<div class="empty">${escapeHtml(e.message)}</div>`;
+        }
+    }
+
+    /**
+     * 去支付
+     */
+    function payOrder(orderNo) {
+        location.href = '/pay?orderNo=' + encodeURIComponent(orderNo);
+    }
+
+    /**
+     * 取消订单
+     */
+    async function cancelOrder(orderNo) {
+        if (!confirm('确认取消该订单？')) return;
+        try {
+            await api('/api/order/' + orderNo + '/cancel', { method: 'POST' });
+            toast('订单已取消', 'success');
+            loadOrders();
+        } catch (e) {
+            toast(e.message || '取消失败', 'error');
+        }
+    }
+
+    /**
+     * 查看订单详情（简化：弹 alert 展示商品清单）
+     */
+    async function viewDetail(orderNo) {
+        try {
+            const o = await api('/api/order/' + orderNo);
+            const items = (o.items || []).map(it => `${it.productName} × ${it.quantity} = ${formatPrice(it.price * it.quantity)}`).join('\n');
+            alert(
+                `订单号：${o.orderNo}\n` +
+                `状态：${orderStatusText(o.status)}\n` +
+                `收件人：${o.receiver || ''} ${o.phone || ''}\n` +
+                `地址：${o.address || ''}\n` +
+                `商品明细：\n${items}\n` +
+                `合计：${formatPrice(o.totalAmount)}\n` +
+                `创建时间：${formatTime(o.createTime)}\n` +
+                (o.paidAt ? `支付时间：${formatTime(o.paidAt)}\n` : '')
+            );
+        } catch (e) {
+            toast(e.message || '加载失败', 'error');
+        }
+    }
+
+    // 复用 layout 用户区
+    (async function renderUser() {
+        const box = document.getElementById('navbarUser');
+        try {
+            const user = await api('/api/auth/info');
+            const nick = user.nickname || user.username || '用户';
+            setCookie(NICKNAME_KEY, nick, 1);
+            const initial = nick.charAt(0).toUpperCase();
+            box.innerHTML = `
+                <span class="avatar">${escapeHtml(initial)}</span>
+                <span>${escapeHtml(nick)}</span>
+                <button class="logout-btn" onclick="logout()">退出</button>
+            `;
+        } catch (e) {
+            box.innerHTML = `<a href="/login">登录</a>`;
+        }
+    })();
+
+    loadOrders();
+</script>
+</body>
+</html>

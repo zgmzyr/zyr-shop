@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<!--
+    zyr_shop 商城前台公共布局
+    使用方式：在子页面以 <div th:replace="~{layout :: content}"> 嵌入主内容
+    包含：顶部导航 + 用户信息 + 退出登录
+    作者 zyr
+-->
+<head th:fragment="head(title)">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${title} + ' - zyr_shop 商城'">zyr_shop 商城</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <script th:src="@{/js/common.js}"></script>
+</head>
+<body>
+<!-- 顶部导航栏 -->
+<header class="navbar">
+    <div class="navbar-inner">
+        <a class="navbar-brand" th:href="@{/}">
+            <span class="logo"></span>
+            <span>zyr_shop 商城</span>
+        </a>
+        <nav class="navbar-menu" id="navbarMenu">
+            <a th:href="@{/}">首页</a>
+            <a th:href="@{/cart}">购物车</a>
+            <a th:href="@{/order}">我的订单</a>
+            <a th:href="@{/chat}">智能客服</a>
+        </nav>
+        <div class="navbar-user" id="navbarUser"></div>
+    </div>
+</header>
+
+<!-- 主内容区 -->
+<div class="container">
+    <div th:fragment="content">主内容区（被子模板替换）</div>
+</div>
+
+<!-- 公共脚本：根据登录态渲染右上角用户区 -->
+<script>
+    // 高亮当前菜单
+    (function highlightMenu() {
+        const path = location.pathname;
+        document.querySelectorAll('#navbarMenu a').forEach(a => {
+            const href = a.getAttribute('href');
+            if ((href === '/' && path === '/') || (href !== '/' && path.startsWith(href))) {
+                a.classList.add('active');
+            }
+        });
+    })();
+
+    // 渲染右上角用户区
+    (async function renderUser() {
+        const box = document.getElementById('navbarUser');
+        const token = getToken();
+        if (!token) {
+            box.innerHTML = `<a href="/login">登录</a>`;
+            return;
+        }
+        try {
+            const user = await api('/api/auth/info');
+            const nick = user.nickname || user.username || '用户';
+            setCookie(NICKNAME_KEY, nick, 1);
+            const initial = nick.charAt(0).toUpperCase();
+            box.innerHTML = `
+                <span class="avatar">${escapeHtml(initial)}</span>
+                <span>${escapeHtml(nick)}</span>
+                <button class="logout-btn" onclick="logout()">退出</button>
+            `;
+        } catch (e) {
+            box.innerHTML = `<a href="/login">登录</a>`;
+        }
+    })();
+</script>
+</body>
+</html>

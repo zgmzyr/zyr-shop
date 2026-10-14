@@ -1,0 +1,42 @@
+# ==========================================================
+# zyr_shop 商城系统 - Git 忽略规则
+# @author zyr
+# ==========================================================
+
+# ---------- Java / Maven 构建产物 ----------
+target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+*.war
+
+# ---------- Node / Vite 前端 ----------
+node_modules/
+dist/
+.vite/
+*.local
+
+# ---------- 日志 ----------
+*.log
+logs/
+
+# ---------- IDE / 编辑器 ----------
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.trae/
+.settings/
+.classpath
+.project
+
+# ---------- 操作系统 ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- 本地私有配置（如含真实密钥请务必忽略）----------
+# 本项目 application-local.yml 仅从环境变量读取凭据，不含明文密钥，故可提交。
+# 若后续在本地写入真实密钥，请取消下一行注释以忽略该文件：
+# application-local.yml

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<!--
+    购物车页（需登录）
+    数据来源：
+      - GET  /api/cart          购物车列表
+      - PUT  /api/cart/{id}     修改数量
+      - DELETE /api/cart/{id}   删除某项
+      - DELETE /api/cart         清空购物车
+    作者 zyr
+-->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>购物车 - zyr_shop 商城</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <script th:src="@{/js/common.js}"></script>
+</head>
+<body>
+<header class="navbar">
+    <div class="navbar-inner">
+        <a class="navbar-brand" th:href="@{/}">
+            <span class="logo"></span>
+            <span>zyr_shop 商城</span>
+        </a>
+        <nav class="navbar-menu">
+            <a th:href="@{/}">首页</a>
+            <a th:href="@{/cart}" class="active">购物车</a>
+            <a th:href="@{/order}">我的订单</a>
+            <a th:href="@{/chat}">智能客服</a>
+        </nav>
+        <div class="navbar-user" id="navbarUser"></div>
+    </div>
+</header>
+
+<div class="container">
+    <div class="card">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>🛒 我的购物车</span>
+            <button class="btn btn-danger btn-sm" onclick="clearCart()">清空购物车</button>
+        </div>
+        <table class="data-table">
+            <thead>
+            <tr>
+                <th>商品</th>
+                <th>单价</th>
+                <th>数量</th>
+                <th>小计</th>
+                <th>操作</th>
+            </tr>
+            </thead>
+            <tbody id="cartBody"></tbody>
+        </table>
+        <div id="cartFooter" style="text-align:right;padding:16px 0;"></div>
+    </div>
+</div>
+
+<script>
+    /** 购物车总金额 */
+    let totalAmount = 0;
+
+    /**
+     * 加载购物车
+     */
+    async function loadCart() {
+        if (!requireLogin()) return;
+        const body = document.getElementById('cartBody');
+        body.innerHTML = `<tr><td colspan="5" class="empty">加载中...</td></tr>`;
+        try {
+            const cart = await api('/api/cart');
+            const items = Array.isArray(cart) ? cart : [];
+            if (items.length === 0) {
+                body.innerHTML = `
+                    <tr><td colspan="5" class="empty">
+                        <div class="icon">🛒</div>
+                        <div>购物车空空如也，去 <a href="/">逛逛</a></div>
+                    </td></tr>`;
+                document.getElementById('cartFooter').innerHTML = '';
+                return;
+            }
+            let total = 0;
+            body.innerHTML = items.map(item => {
+                const sub = item.price * item.quantity;
+                total += sub;
+                return `
+                    <tr>
+                        <td>
+                            <div class="product-cell">
+                                <div class="thumb">
+                                    ${item.coverImage ? `<img src="${escapeHtml(item.coverImage)}" alt="${escapeHtml(item.productName)}">` : '📦'}
+                                </div>
+                                <div>
+                                    <a href="/product/${item.productId}">${escapeHtml(item.productName)}</a>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="text-danger">${formatPrice(item.price)}</td>
+                        <td>
+                            <div class="quantity-picker">
+                                <button onclick="updateQty(${item.id}, ${item.quantity - 1})" ${item.quantity <= 1 ? 'disabled' : ''}>-</button>
+                                <input value="${item.quantity}" readonly>
+                                <button onclick="updateQty(${item.id}, ${item.quantity + 1})">+</button>
+                            </div>
+                        </td>
+                        <td class="text-danger">${formatPrice(sub)}</td>
+                        <td>
+                            <button class="btn btn-default btn-sm" onclick="removeItem(${item.id})">删除</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            totalAmount = total;
+            document.getElementById('cartFooter').innerHTML = `
+                合计：<span class="text-danger" style="font-size:20px;font-weight:600;">${formatPrice(total)}</span>
+                <button class="btn btn-warning" style="margin-left:16px;" onclick="location.href='/checkout'">去结算</button>
+            `;
+        } catch (e) {
+            body.innerHTML = `<tr><td colspan="5" class="empty">${escapeHtml(e.message)}</td></tr>`;
+        }
+    }
+
+    /**
+     * 修改数量
+     */
+    async function updateQty(itemId, qty) {
+        if (qty < 1) return;
+        try {
+            await api('/api/cart/' + itemId + '?quantity=' + qty, {
+                method: 'PUT'
+            });
+            loadCart();
+        } catch (e) {
+            toast(e.message || '修改失败', 'error');
+        }
+    }
+
+    /**
+     * 删除某项
+     */
+    async function removeItem(itemId) {
+        if (!confirm('确认删除该商品？')) return;
+        try {
+            await api('/api/cart/' + itemId, { method: 'DELETE' });
+            toast('已删除', 'success');
+            loadCart();
+        } catch (e) {
+            toast(e.message || '删除失败', 'error');
+        }
+    }
+
+    /**
+     * 清空购物车
+     */
+    async function clearCart() {
+        if (!confirm('确认清空购物车？')) return;
+        try {
+            await api('/api/cart', { method: 'DELETE' });
+            toast('已清空', 'success');
+            loadCart();
+        } catch (e) {
+            toast(e.message || '清空失败', 'error');
+        }
+    }
+
+    // 复用 layout 用户区
+    (async function renderUser() {
+        const box = document.getElementById('navbarUser');
+        try {
+            const user = await api('/api/auth/info');
+            const nick = user.nickname || user.username || '用户';
+            setCookie(NICKNAME_KEY, nick, 1);
+            const initial = nick.charAt(0).toUpperCase();
+            box.innerHTML = `
+                <span class="avatar">${escapeHtml(initial)}</span>
+                <span>${escapeHtml(nick)}</span>
+                <button class="logout-btn" onclick="logout()">退出</button>
+            `;
+        } catch (e) {
+            box.innerHTML = `<a href="/login">登录</a>`;
+        }
+    })();
+
+    loadCart();
+</script>
+</body>
+</html>

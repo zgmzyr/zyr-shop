@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<!--
+    支付页（支付宝沙箱）
+    流程：
+      1. 从 URL 取 orderNo
+      2. POST /api/payment/pay（表单参数 orderNo）→ 返回支付宝 form HTML 字符串
+      3. document.write 输出 form，浏览器自动提交跳转支付宝沙箱网关
+      4. 用户付款完成 → 浏览器跳 return-url=/order；支付宝服务端异步回调 /api/payment/notify 更新订单
+    作者 zyr
+-->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>支付 - zyr_shop 商城</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <script th:src="@{/js/common.js}"></script>
+</head>
+<body>
+<div class="container">
+    <div class="card" style="text-align:center;padding:60px;">
+        <div id="payArea">
+            <div class="icon" style="font-size:60px;margin-bottom:16px;">⏳</div>
+            <h2>正在准备支付宝沙箱收银台...</h2>
+            <p class="text-muted" style="margin-top:8px;">请稍候，浏览器即将跳转支付宝沙箱页面完成付款</p>
+            <div style="margin-top:24px;">
+                <a href="/order" class="btn btn-default">返回订单列表</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    /**
+     * 调用后端生成支付宝支付表单并自动提交
+     */
+    async function startPay() {
+        const orderNo = getQueryParam('orderNo');
+        if (!orderNo) {
+            showError('缺少订单号');
+            return;
+        }
+        if (!requireLogin()) return;
+        try {
+            // 后端返回支付宝电脑网站支付 alipay.trade.page.pay 的 form HTML
+            // 注意：后端 /api/payment/pay 使用 @RequestParam 接收，
+            // 故此处以 application/x-www-form-urlencoded 表单方式提交 orderNo
+            const params = new URLSearchParams();
+            params.append('orderNo', orderNo);
+            const formHtml = await api('/api/payment/pay', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params
+            });
+            if (!formHtml || formHtml.indexOf('<form') < 0) {
+                throw new Error(typeof formHtml === 'string' ? formHtml : '未获取到支付表单');
+            }
+            // 直接写入文档：浏览器会自动 submit 该 form 跳转支付宝沙箱
+            document.open();
+            document.write(formHtml);
+            document.close();
+        } catch (e) {
+            showError(e.message || '发起支付失败');
+        }
+    }
+
+    /**
+     * 错误提示
+     */
+    function showError(msg) {
+        document.getElementById('payArea').innerHTML = `
+            <div class="icon" style="font-size:60px;margin-bottom:16px;color:#f56c6c;">⚠️</div>
+            <h2>支付发起失败</h2>
+            <p class="text-danger" style="margin-top:8px;">${escapeHtml(msg)}</p>
+            <div style="margin-top:24px;">
+                <a href="/order" class="btn btn-primary">返回订单</a>
+            </div>
+        `;
+    }
+
+    startPay();
+</script>
+</body>
+</html>
